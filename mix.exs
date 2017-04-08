@@ -29,7 +29,7 @@ defmodule Nadia.Mixfile do
   #
   # Type `mix help deps` for more examples and options
   defp deps do
-    [{:httpoison, "~> 0.9"},
+    [{:httpoison, "~> 0.11.1"},
      {:poison, "~> 3.0"},
      {:exvcr, "~> 0.7", only: [:dev, :test]},
      {:earmark, "~> 0.2", only: :docs},
