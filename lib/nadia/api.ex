@@ -4,27 +4,9 @@ defmodule Nadia.API do
   """
 
   alias Nadia.Model.Error
+  alias Nadia.Config
 
-  @default_timeout 5
-  @base_url "https://api.telegram.org/bot"
-
-  defp token, do: config_or_env(:token)
-  defp recv_timeout, do: config_or_env(:recv_timeout) || @default_timeout
-
-  defp config_or_env(key) do
-    case Application.fetch_env(:nadia, key) do
-      {:ok, {:system, var}} -> System.get_env(var)
-      {:ok, {:system, var, default}} ->
-        case System.get_env(var) do
-          nil -> default
-          val -> val
-        end
-      {:ok, value} -> value
-      :error -> nil
-    end
-  end
-
-  defp build_url(method), do: @base_url <> token() <> "/" <> method
+  defp build_url(method), do: Config.base_url() <> Config.token() <> "/" <> method
 
   defp process_response(response, method) do
     case decode_response(response) do
@@ -32,47 +14,54 @@ defmodule Nadia.API do
       {:ok, result} -> {:ok, Nadia.Parser.parse_result(result, method)}
       %{ok: false, description: description} -> {:error, %Error{reason: description}}
       {:error, %HTTPoison.Error{reason: reason}} -> {:error, %Error{reason: reason}}
+      {:error, error} -> {:error, %Error{reason: error}}
     end
   end
 
   defp decode_response(response) do
     with {:ok, %HTTPoison.Response{body: body}} <- response,
-          %{result: result} <- Poison.decode!(body, keys: :atoms),
-      do: {:ok, result}
+         {:ok, %{result: result}} <- Poison.decode(body, keys: :atoms),
+         do: {:ok, result}
   end
 
   defp build_multipart_request(params, file_field) do
     {file_path, params} = Keyword.pop(params, file_field)
     params = for {k, v} <- params, do: {to_string(k), v}
-    {:multipart, params ++ [
-      {:file, file_path,
-       {"form-data", [{"name", to_string(file_field)}, {"filename", file_path}]}, []}
-    ]}
+
+    {:multipart,
+     params ++
+       [
+         {:file, file_path,
+          {"form-data", [{"name", to_string(file_field)}, {"filename", file_path}]}, []}
+       ]}
   end
 
   defp calculate_timeout(options) when is_list(options) do
-     (Keyword.get(options, :timeout, 0) + recv_timeout()) * 1000
+    (Keyword.get(options, :timeout, 0) + Config.recv_timeout()) * 1000
   end
 
   defp calculate_timeout(options) when is_map(options) do
-     (Map.get(options, :timeout, 0) + recv_timeout()) * 1000
+    (Map.get(options, :timeout, 0) + Config.recv_timeout()) * 1000
   end
 
   defp build_request(params, file_field) when is_list(params) do
-    params = params
-    |> Keyword.update(:reply_markup, nil, &(Poison.encode!(&1)))
-    |> Enum.filter_map(fn {_, v} -> v end, fn {k, v} -> {k, to_string(v)} end)
-    if !is_nil(file_field) and File.exists?(params[file_field]) do
-      build_multipart_request(params, file_field)
-    else
-      {:form, params}
-    end
+    params
+    |> Keyword.update(:reply_markup, nil, &Poison.encode!(&1))
+    |> map_params(file_field)
   end
 
   defp build_request(params, file_field) when is_map(params) do
-    params = params
-    |> Map.update(:reply_markup, nil, &(Poison.encode!(&1)))
-    |> Enum.filter_map(fn {_, v} -> v end, fn {k, v} -> {k, to_string(v)} end)
+    params
+    |> Map.update(:reply_markup, nil, &Poison.encode!(&1))
+    |> map_params(file_field)
+  end
+
+  defp map_params(params, file_field) do
+    params =
+      params
+      |> Enum.filter(fn {_, v} -> v end)
+      |> Enum.map(fn {k, v} -> {k, to_string(v)} end)
+
     if !is_nil(file_field) and File.exists?(params[file_field]) do
       build_multipart_request(params, file_field)
     else
@@ -84,7 +73,7 @@ defmodule Nadia.API do
     timeout = calculate_timeout(options)
     opts = [recv_timeout: timeout]
 
-    case config_or_env(:proxy) do
+    case Config.proxy() do
       proxy when byte_size(proxy) > 0 -> Keyword.put(opts, :proxy, proxy)
       _ -> opts
     end
@@ -98,6 +87,7 @@ defmodule Nadia.API do
   * `options` - orddict of options
   * `file_field` - specify the key of file_field in `options` when sending files
   """
+  @spec request(binary, [{atom, any}], atom) :: :ok | {:error, Error.t()} | {:ok, any}
   def request(method, options \\ [], file_field \\ nil) do
     method
     |> build_url
@@ -106,6 +96,7 @@ defmodule Nadia.API do
   end
 
   def request?(method, options \\ [], file_field \\ nil) do
-    {_, response} = request(method, options, file_field); response
+    {_, response} = request(method, options, file_field)
+    response
   end
 end

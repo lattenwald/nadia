@@ -8,7 +8,7 @@ Add Nadia to your `mix.exs` dependencies:
 
 ```elixir
 def deps do
-  [{:nadia, "~> 0.4.2"}]
+  [{:nadia, "~> 0.4.3"}]
 end
 ```
 and run `$ mix deps.get`.
@@ -26,6 +26,18 @@ You can also add an optional recv_timeout in seconds (defaults to 5s).
 ```elixir
 config :nadia,
   recv_timeout: 10
+```
+
+You can also configure the the base url for the api if you need to for some
+reason.
+
+```elixir
+config :nadia,
+  # Telegram API. Default: https://api.telegram.org/bot
+  base_url: "http://my-own-endpoint.com/whatever/",
+
+  # Telegram Graph API. Default: https://api.telegra.ph
+  graph_base_url: "http://my-own-endpoint.com/whatever/"
 ```
 
 Environment variables may be used as well:
