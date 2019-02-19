@@ -6,13 +6,11 @@ defmodule Nadia do
   https://core.telegram.org/bots/api#available-methods
   """
 
-  alias Nadia.Model.{User, Message, Update, UserProfilePhotos, File, Error}
+  alias Nadia.Model.{User, Message, Update, UserProfilePhotos, File, Error, WebhookInfo}
 
   import Nadia.API
 
   @behaviour Nadia.Behaviour
-
-  @base_file_url "https://api.telegram.org/file/bot"
 
   @doc """
   A simple method for testing your bot's auth token. Requires no parameters.
@@ -376,7 +374,7 @@ defmodule Nadia do
   updates starting with the earliest unconfirmed update are returned. An update is
   considered confirmed as soon as `get_updates` is called with an `offset` higher than
   its `update_id`.
-  * `:limit` - Limits the number of photos to be retrieved. Values between 1—100 are
+  * `:limit` - Limits the number of updates to be retrieved. Values between 1—100 are
   accepted. Defaults to 100
   * `:timeout` - Timeout in seconds for long polling. Defaults to 0, i.e. usual short
   polling
@@ -394,11 +392,27 @@ defmodule Nadia do
   * `options` - orddict of options
 
   Options:
-  * `:url` - HTTPS url to send updates to. Use an empty string to remove webhook
-  integration
+  * `:url` - HTTPS url to send updates to. 
   """
   @spec set_webhook([{atom, any}]) :: :ok | {:error, Error.t()}
   def set_webhook(options \\ []), do: request("setWebhook", options)
+
+  @doc """
+  Use this method to remove webhook integration if you decide to switch back to `Nadia.get_updates/1`. 
+  Returns `:ok` on success. 
+
+  Requires no parameters.
+  """
+  @spec delete_webhook() :: :ok | {:error, Error.t()}
+  def delete_webhook(), do: request("deleteWebhook")
+
+  @doc """
+  Use this method to get current webhook status. Requires no parameters. 
+  On success, returns a `Nadia.Model.WebhookInfo.t()` object with webhook details. 
+  If the bot is using getUpdates, will return an object with the url field empty.
+  """
+  @spec get_webhook_info() :: {:ok, WebhookInfo.t()} | {:error, Error.t()}
+  def get_webhook_info(), do: request("getWebhookInfo")
 
   @doc """
   Use this method to get basic info about a file and prepare it for downloading.
@@ -422,13 +436,12 @@ defmodule Nadia do
       iex> Nadia.get_file_link(%Nadia.Model.File{file_id: "BQADBQADBgADmEjsA1aqdSxtzvvVAg",
       ...> file_path: "document/file_10", file_size: 17680})
       {:ok,
-      "https://api.telegram.org/file/bot#{Application.get_env(:nadia, :token)}/document/file_10"}
+      "https://api.telegram.org/file/bot#{Nadia.Config.token()}/document/file_10"}
 
   """
   @spec get_file_link(File.t()) :: {:ok, binary} | {:error, Error.t()}
   def get_file_link(file) do
-    token = Application.get_env(:nadia, :token)
-    {:ok, @base_file_url <> token <> "/" <> file.file_path}
+    {:ok, build_file_url(file.file_path)}
   end
 
   @doc """
@@ -575,7 +588,7 @@ defmodule Nadia do
   * `:reply_markup`	- A JSON-serialized object for an inline
   keyboard - `Nadia.Model.InlineKeyboardMarkup`
   """
-  @spec edit_message_text(integer | binary, integer, binary, [{atom, any}]) ::
+  @spec edit_message_text(integer | binary, integer, binary, binary, [{atom, any}]) ::
           {:ok, Message.t()} | {:error, Error.t()}
   def edit_message_text(chat_id, message_id, inline_message_id, text, options \\ []) do
     request(

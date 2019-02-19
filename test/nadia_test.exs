@@ -6,7 +6,7 @@ defmodule NadiaTest do
 
   setup_all do
     unless Application.get_env(:nadia, :token) do
-      Application.put_env(:nadia, :token, "TEST_TOKEN")
+      Application.put_env(:nadia, :token, {:system, "ENV_TOKEN", "TEST_TOKEN"})
     end
 
     :ok
@@ -115,9 +115,25 @@ defmodule NadiaTest do
     end
   end
 
+  test "get webhook info" do
+    use_cassette "get_webhook_info" do
+      webhook_info = %Nadia.Model.WebhookInfo{
+        allowed_updates: [],
+        has_custom_certificate: false,
+        last_error_date: nil,
+        last_error_message: nil,
+        max_connections: nil,
+        pending_update_count: 0,
+        url: ""
+      }
+
+      assert Nadia.get_webhook_info() == {:ok, webhook_info}
+    end
+  end
+
   test "delete webhook" do
     use_cassette "delete_webhook" do
-      assert Nadia.set_webhook() == :ok
+      assert Nadia.delete_webhook() == :ok
     end
   end
 
@@ -127,6 +143,19 @@ defmodule NadiaTest do
       refute is_nil(file.file_path)
       assert file.file_id == "BQADBQADBgADmEjsA1aqdSxtzvvVAg"
     end
+  end
+
+  test "get_file_link" do
+    file = %Nadia.Model.File{
+      file_id: "BQADBQADBgADmEjsA1aqdSxtzvvVAg",
+      file_path: "document/file_10",
+      file_size: 17680
+    }
+
+    {:ok, file_link} = Nadia.get_file_link(file)
+
+    assert file_link ==
+             "https://api.telegram.org/file/bot#{Nadia.Config.token()}/document/file_10"
   end
 
   test "get_chat" do
